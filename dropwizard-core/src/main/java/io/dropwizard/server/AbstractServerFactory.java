@@ -10,20 +10,22 @@ import com.codahale.metrics.servlets.MetricsServlet;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.base.Charsets;
 import com.google.common.base.Joiner;
 import com.google.common.io.Resources;
 import io.dropwizard.jersey.errors.EarlyEofExceptionMapper;
 import io.dropwizard.jersey.errors.LoggingExceptionMapper;
 import io.dropwizard.jersey.filter.AllowedMethodsFilter;
-import io.dropwizard.jersey.jackson.JsonProcessingExceptionMapper;
-import io.dropwizard.jersey.validation.ConstraintViolationExceptionMapper;
 import io.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
+import io.dropwizard.jersey.jackson.JsonProcessingExceptionMapper;
 import io.dropwizard.jersey.setup.JerseyEnvironment;
-import io.dropwizard.jetty.GzipFilterFactory;
+import io.dropwizard.jersey.validation.HibernateValidationFeature;
+import io.dropwizard.jersey.validation.JerseyViolationExceptionMapper;
+import io.dropwizard.jetty.GzipHandlerFactory;
 import io.dropwizard.jetty.MutableServletContextHandler;
 import io.dropwizard.jetty.NonblockingServletHolder;
 import io.dropwizard.jetty.RequestLogFactory;
+import io.dropwizard.jetty.Slf4jRequestLogFactory;
+import io.dropwizard.jetty.ServerPushFilterFactory;
 import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
 import io.dropwizard.servlets.ThreadNameFilter;
 import io.dropwizard.util.Duration;
@@ -34,7 +36,6 @@ import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.handler.ErrorHandler;
 import org.eclipse.jetty.server.handler.RequestLogHandler;
 import org.eclipse.jetty.server.handler.StatisticsHandler;
-import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.setuid.RLimit;
 import org.eclipse.jetty.setuid.SetUIDListener;
 import org.eclipse.jetty.util.BlockingArrayQueue;
@@ -51,12 +52,11 @@ import javax.validation.Validator;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.regex.Pattern;
-
-// TODO: 5/15/13 <coda> -- add tests for AbstractServerFactory
 
 /**
  * A base class for {@link ServerFactory} implementations.
@@ -76,7 +76,12 @@ import java.util.regex.Pattern;
  *     <tr>
  *         <td>{@code gzip}</td>
  *         <td></td>
- *         <td>The {@link GzipFilterFactory GZIP} configuration.</td>
+ *         <td>The {@link GzipHandlerFactory GZIP} configuration.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code serverPush}</td>
+ *         <td></td>
+ *         <td>The {@link ServerPushFilterFactory} configuration.</td>
  *     </tr>
  *     <tr>
  *         <td>{@code maxThreads}</td>
@@ -204,11 +209,15 @@ public abstract class AbstractServerFactory implements ServerFactory {
 
     @Valid
     @NotNull
-    private RequestLogFactory requestLog = new RequestLogFactory();
+    private RequestLogFactory requestLog = new Slf4jRequestLogFactory();
 
     @Valid
     @NotNull
-    private GzipFilterFactory gzip = new GzipFilterFactory();
+    private GzipHandlerFactory gzip = new GzipHandlerFactory();
+
+    @Valid
+    @NotNull
+    private ServerPushFilterFactory serverPush = new ServerPushFilterFactory();
 
     @Min(2)
     private int maxThreads = 1024;
@@ -266,13 +275,23 @@ public abstract class AbstractServerFactory implements ServerFactory {
     }
 
     @JsonProperty("gzip")
-    public GzipFilterFactory getGzipFilterFactory() {
+    public GzipHandlerFactory getGzipFilterFactory() {
         return gzip;
     }
 
     @JsonProperty("gzip")
-    public void setGzipFilterFactory(GzipFilterFactory gzip) {
+    public void setGzipFilterFactory(GzipHandlerFactory gzip) {
         this.gzip = gzip;
+    }
+
+    @JsonProperty("serverPush")
+    public ServerPushFilterFactory getServerPush() {
+        return serverPush;
+    }
+
+    @JsonProperty("serverPush")
+    public void setServerPush(ServerPushFilterFactory serverPush) {
+        this.serverPush = serverPush;
     }
 
     @JsonProperty
@@ -468,10 +487,7 @@ public abstract class AbstractServerFactory implements ServerFactory {
         handler.addFilter(AllowedMethodsFilter.class, "/*", EnumSet.of(DispatcherType.REQUEST))
                 .setInitParameter(AllowedMethodsFilter.ALLOWED_METHODS_PARAM, Joiner.on(',').join(allowedMethods));
         handler.addFilter(ThreadNameFilter.class, "/*", EnumSet.of(DispatcherType.REQUEST));
-        if (gzip.isEnabled()) {
-            final FilterHolder holder = new FilterHolder(gzip.build());
-            handler.addFilter(holder, "/*", EnumSet.allOf(DispatcherType.class));
-        }
+        serverPush.addFilter(handler);
         if (jerseyContainer != null) {
             String urlPattern = jerseyRootPath;
             if (!urlPattern.endsWith("*") && !urlPattern.endsWith("/")) {
@@ -481,11 +497,12 @@ public abstract class AbstractServerFactory implements ServerFactory {
                 urlPattern += "*";
             }
             jersey.setUrlPattern(urlPattern);
-            jersey.register(new JacksonMessageBodyProvider(objectMapper, validator));
+            jersey.register(new JacksonMessageBodyProvider(objectMapper));
+            jersey.register(new HibernateValidationFeature(validator));
             if (registerDefaultExceptionMappers == null || registerDefaultExceptionMappers) {
                 jersey.register(new LoggingExceptionMapper<Throwable>() {
                 });
-                jersey.register(new ConstraintViolationExceptionMapper());
+                jersey.register(new JerseyViolationExceptionMapper());
                 jersey.register(new JsonProcessingExceptionMapper());
                 jersey.register(new EarlyEofExceptionMapper());
             }
@@ -580,15 +597,19 @@ public abstract class AbstractServerFactory implements ServerFactory {
     protected Handler addStatsHandler(Handler handler) {
         // Graceful shutdown is implemented via the statistics handler,
         // see https://bugs.eclipse.org/bugs/show_bug.cgi?id=420142
-        StatisticsHandler statisticsHandler = new StatisticsHandler();
+        final StatisticsHandler statisticsHandler = new StatisticsHandler();
         statisticsHandler.setHandler(handler);
         return statisticsHandler;
+    }
+
+    protected Handler buildGzipHandler(Handler handler) {
+        return gzip.isEnabled() ? gzip.build(handler) : handler;
     }
 
     protected void printBanner(String name) {
         try {
             final String banner = WINDOWS_NEWLINE.matcher(Resources.toString(Resources.getResource("banner.txt"),
-                                                                             Charsets.UTF_8))
+                                                                             StandardCharsets.UTF_8))
                                                  .replaceAll("\n")
                                                  .replace("\n", String.format("%n"));
             LOGGER.info(String.format("Starting {}%n{}"), name, banner);

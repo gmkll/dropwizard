@@ -10,7 +10,6 @@ import java.util.zip.GZIPOutputStream;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.client.ClientRequestContext;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.ext.InterceptorContext;
 import javax.ws.rs.ext.WriterInterceptorContext;
 
 import javax.ws.rs.core.HttpHeaders;
@@ -30,7 +29,7 @@ public class ConfiguredGZipEncoderTest {
     @Test
     public void gzipParametersSpec() throws IOException {
         ClientRequestContext context = mock(ClientRequestContext.class);
-        MultivaluedMap<String, Object> headers = new MultivaluedHashMap<String, Object>();
+        MultivaluedMap<String, Object> headers = new MultivaluedHashMap<>();
         when(context.getHeaders()).thenReturn(headers);
         headers.put(HttpHeaders.CONTENT_ENCODING, null);
         when(context.hasEntity()).thenReturn(true);

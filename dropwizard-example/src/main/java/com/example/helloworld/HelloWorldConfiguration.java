@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableMap;
 import io.dropwizard.Configuration;
 import io.dropwizard.db.DataSourceFactory;
+import io.dropwizard.metrics.graphite.GraphiteReporterFactory;
 import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.validation.Valid;
@@ -22,9 +23,12 @@ public class HelloWorldConfiguration extends Configuration {
     @Valid
     @NotNull
     private DataSourceFactory database = new DataSourceFactory();
-    
+
     @NotNull
     private Map<String, Map<String, String>> viewRendererConfiguration = Collections.emptyMap();
+
+    @Valid
+    private GraphiteReporterFactory graphiteReporterFactory = new GraphiteReporterFactory();
 
     @JsonProperty
     public String getTemplate() {
@@ -67,10 +71,20 @@ public class HelloWorldConfiguration extends Configuration {
 
     @JsonProperty("viewRendererConfiguration")
     public void setViewRendererConfiguration(Map<String, Map<String, String>> viewRendererConfiguration) {
-        ImmutableMap.Builder<String, Map<String, String>> builder = ImmutableMap.builder();
+        final ImmutableMap.Builder<String, Map<String, String>> builder = ImmutableMap.builder();
         for (Map.Entry<String, Map<String, String>> entry : viewRendererConfiguration.entrySet()) {
             builder.put(entry.getKey(), ImmutableMap.copyOf(entry.getValue()));
         }
         this.viewRendererConfiguration = builder.build();
+    }
+
+    @JsonProperty("metrics")
+    public GraphiteReporterFactory getGraphiteReporterFactory() {
+        return graphiteReporterFactory;
+    }
+
+    @JsonProperty("metrics")
+    public void setGraphiteReporterFactory(GraphiteReporterFactory graphiteReporterFactory) {
+        this.graphiteReporterFactory = graphiteReporterFactory;
     }
 }

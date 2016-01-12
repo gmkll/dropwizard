@@ -6,10 +6,10 @@ import io.dropwizard.configuration.ConfigurationFactory;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.logging.BootstrapLogging;
 import io.dropwizard.util.Duration;
+import io.dropwizard.validation.BaseValidator;
 import org.junit.Before;
 import org.junit.Test;
 
-import javax.validation.Validation;
 import java.io.File;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,7 +22,7 @@ public class MetricsFactoryTest {
     private final ObjectMapper objectMapper = Jackson.newObjectMapper();
     private final ConfigurationFactory<MetricsFactory> factory =
             new ConfigurationFactory<>(MetricsFactory.class,
-                                       Validation.buildDefaultValidatorFactory().getValidator(),
+                                       BaseValidator.newValidator(),
                                        objectMapper, "dw");
     private MetricsFactory config;
 

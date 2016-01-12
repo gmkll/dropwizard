@@ -2,7 +2,6 @@ package io.dropwizard.lifecycle.setup;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.Mockito;
 import org.slf4j.Logger;
 
 import java.util.concurrent.ArrayBlockingQueue;
@@ -37,7 +36,7 @@ public class ExecutorServiceBuilderTest {
 
     @Test
     public void testGiveNoWarningAboutMaximumPoolSizeAndBoundedQueue() {
-        executorServiceBuilder.workQueue(new ArrayBlockingQueue<Runnable>(16));
+        executorServiceBuilder.workQueue(new ArrayBlockingQueue<>(16));
 
         executorServiceBuilder.build();
 

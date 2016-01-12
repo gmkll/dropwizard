@@ -3,15 +3,21 @@ package io.dropwizard.jackson;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.Version;
-import com.fasterxml.jackson.databind.*;
+import com.fasterxml.jackson.databind.BeanDescription;
+import com.fasterxml.jackson.databind.DeserializationConfig;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.Module;
 import com.fasterxml.jackson.databind.deser.Deserializers;
 import com.fasterxml.jackson.databind.deser.std.EnumDeserializer;
 import com.fasterxml.jackson.databind.deser.std.StdScalarDeserializer;
 import com.fasterxml.jackson.databind.introspect.AnnotatedMethod;
 import com.google.common.base.CharMatcher;
-import com.google.common.collect.Lists;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -36,7 +42,7 @@ public class FuzzyEnumModule extends Module {
         protected PermissiveEnumDeserializer(Class<Enum<?>> clazz) {
             super(clazz);
             this.constants = ((Class<Enum<?>>) handledType()).getEnumConstants();
-            this.acceptedValues = Lists.newArrayList();
+            this.acceptedValues = new ArrayList<>();
             for (Enum<?> constant : constants) {
                 acceptedValues.add(constant.name());
             }
@@ -50,6 +56,15 @@ public class FuzzyEnumModule extends Module {
                     .replace('.', '_');
             for (Enum<?> constant : constants) {
                 if (constant.name().equalsIgnoreCase(text)) {
+                    return constant;
+                }
+            }
+
+            //In some cases there are certain enums that don't follow the same patter across an enterprise.  So this
+            //means that you have a mix of enums that use toString(), some use @JsonCreator, and some just use the
+            //standard constant name().  This block handles finding the proper enum by toString()
+            for (Enum<?> constant : constants) {
+                if (constant.toString().equalsIgnoreCase(jp.getText())) {
                     return constant;
                 }
             }

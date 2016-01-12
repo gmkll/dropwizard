@@ -35,7 +35,7 @@ password is ``secret``, authenticates the client as a ``User`` with the client-p
 If the password doesn't match, an absent ``Optional`` is returned instead, indicating that the
 credentials are invalid.
 
-.. warning:: It's important for authentication services to not provide too much information in their
+.. warning:: It's important for authentication services not to provide too much information in their
              errors. The fact that a username or email has an account may be meaningful to an
              attacker, so the ``Authenticator`` interface doesn't allow you to distinguish between
              a bad username and a bad password. You should only throw an ``AuthenticationException``
@@ -108,7 +108,7 @@ is not required.
                     .buildAuthFilter()));
         environment.jersey().register(RolesAllowedDynamicFeature.class);
         //If you want to use @Auth to inject a custom Principal type into your resource
-        environment.jersey().register(new AuthValueFactoryProvider.Binder(User.class));
+        environment.jersey().register(new AuthValueFactoryProvider.Binder<>(User.class));
     }
 
 .. _man-auth-oauth2:
@@ -162,7 +162,7 @@ The ``ChainedAuthFilter`` enables usage of various authentication factories at t
                 .buildAuthFilter();
 
         List<AuthFilter> filters = Lists.newArrayList(basicCredentialAuthFilter, oauthCredentialAuthFilter);
-        environment.jersey().register(new AuthDynamicFeature(new ChainedAuthFilter(handlers)));
+        environment.jersey().register(new AuthDynamicFeature(new ChainedAuthFilter(filters)));
         environment.jersey().register(RolesAllowedDynamicFeature.class);
         //If you want to use @Auth to inject a custom Principal type into your resource
         environment.jersey().register(new AuthValueFactoryProvider.Binder<>(User.class));
@@ -179,7 +179,7 @@ Protecting Resources
 There are two ways to protect a resource.  You can mark your resource method with one of the following annotations:
 
 * ``@PermitAll``. All authenticated users will have access to the method.
-* ``@RolesAllowed``. Access will be granted for the users with the specified roles.
+* ``@RolesAllowed``. Access will be granted to the users with the specified roles.
 * ``@DenyAll``. No access will be granted to anyone.
 
 Alternatively, you can annotate the parameter representing your principal with ``@Auth``. Note you must register a
@@ -216,3 +216,68 @@ resource method.
 If you have a resource which is optionally protected (e.g., you want to display a logged-in user's
 name but not require login), you need to implement a custom filter which injects a security context
 containing the principal if it exists, without performing authentication.
+
+Testing Protected Resources
+===========================
+
+Add this dependency into your ``pom.xml`` file:
+
+.. code-block:: xml
+
+    <dependencies>
+      <dependency>
+        <groupId>io.dropwizard</groupId>
+        <artifactId>dropwizard-testing</artifactId>
+        <version>${dropwizard.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.glassfish.jersey.test-framework.providers</groupId>
+        <artifactId>jersey-test-framework-provider-grizzly2</artifactId>
+        <version>${jersey.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>javax.servlet</groupId>
+            <artifactId>javax.servlet-api</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+    </dependencies>
+
+When you build your ``ResourceTestRule``, add the ``GrizzlyWebTestContainerFactory`` line.
+
+.. code-block:: java
+
+    @Rule
+    public ResourceTestRule rule = ResourceTestRule
+            .builder()
+            .setTestContainerFactory(new GrizzlyWebTestContainerFactory())
+            .addProvider(new AuthDynamicFeature(new OAuthCredentialAuthFilter.Builder<User>()
+                    .setAuthenticator(new MyOAuthAuthenticator())
+                    .setAuthorizer(new MyAuthorizer())
+                    .setRealm("SUPER SECRET STUFF")
+                    .setPrefix("Bearer")
+                    .buildAuthFilter()))
+            .addProvider(RolesAllowedDynamicFeature.class)
+            .addProvider(new AuthValueFactoryProvider.Binder<>(User.class))
+            .addResource(new ProtectedResource())
+            .build();
+
+
+In this example, we are testing the oauth authentication, so we need to set the header manually. Note the use of ``resources.getJerseyTest()`` to make the test work
+
+.. code-block:: java
+
+    @Test
+    public void testProtected() throws Exception {
+        final Response response = rule.getJerseyTest().target("/protected")
+                .request(MediaType.APPLICATION_JSON_TYPE)
+                .header("Authorization", "Bearer TOKEN")
+                .get();
+
+        assertThat(response.getStatus()).isEqualTo(200);
+    }
+

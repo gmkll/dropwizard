@@ -5,7 +5,6 @@ import java.util.zip.GZIPOutputStream;
 
 import javax.annotation.Priority;
 import javax.ws.rs.Priorities;
-import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.client.ClientRequestContext;
 import javax.ws.rs.client.ClientRequestFilter;
 import javax.ws.rs.core.HttpHeaders;
@@ -41,7 +40,7 @@ public class ConfiguredGZipEncoder implements WriterInterceptor, ClientRequestFi
 
     @Override
     public final void aroundWriteTo(WriterInterceptorContext context) throws IOException {
-        String contentEncoding = (String) context.getHeaders().getFirst(HttpHeaders.CONTENT_ENCODING);
+        final String contentEncoding = (String) context.getHeaders().getFirst(HttpHeaders.CONTENT_ENCODING);
         if ((contentEncoding != null) &&
                 (contentEncoding.equals("gzip") || contentEncoding.equals("x-gzip"))) {
             context.setOutputStream(new GZIPOutputStream(context.getOutputStream()));

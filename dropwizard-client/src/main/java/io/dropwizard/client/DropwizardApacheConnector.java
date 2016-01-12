@@ -1,11 +1,9 @@
 package io.dropwizard.client;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.MoreExecutors;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
-import org.apache.http.HttpHeaders;
 import org.apache.http.StatusLine;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -30,6 +28,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Future;
 
@@ -72,7 +71,8 @@ public class DropwizardApacheConnector implements Connector {
      */
     private final boolean chunkedEncodingEnabled;
 
-    public DropwizardApacheConnector(CloseableHttpClient client, RequestConfig defaultRequestConfig, boolean chunkedEncodingEnabled) {
+    public DropwizardApacheConnector(CloseableHttpClient client, RequestConfig defaultRequestConfig,
+                                     boolean chunkedEncodingEnabled) {
         this.client = client;
         this.defaultRequestConfig = defaultRequestConfig;
         this.chunkedEncodingEnabled = chunkedEncodingEnabled;
@@ -95,7 +95,7 @@ public class DropwizardApacheConnector implements Connector {
             for (Header header : apacheResponse.getAllHeaders()) {
                 final List<String> headerValues = jerseyResponse.getHeaders().get(header.getName());
                 if (headerValues == null) {
-                    jerseyResponse.getHeaders().put(header.getName(), Lists.newArrayList(header.getValue()));
+                    jerseyResponse.getHeaders().put(header.getName(), Collections.singletonList(header.getValue()));
                 } else {
                     headerValues.add(header.getValue());
                 }
@@ -122,19 +122,15 @@ public class DropwizardApacheConnector implements Connector {
      * @return a new {@link org.apache.http.client.methods.HttpUriRequest}
      */
     private HttpUriRequest buildApacheRequest(ClientRequest jerseyRequest) {
-        RequestBuilder builder = RequestBuilder
+        final RequestBuilder builder = RequestBuilder
                 .create(jerseyRequest.getMethod())
                 .setUri(jerseyRequest.getUri())
                 .setEntity(getHttpEntity(jerseyRequest));
         for (String headerName : jerseyRequest.getHeaders().keySet()) {
-            // Ignore user-agent because it's already configured in the Apache HTTP client
-            if (headerName.equalsIgnoreCase(HttpHeaders.USER_AGENT)) {
-                continue;
-            }
             builder.addHeader(headerName, jerseyRequest.getHeaderString(headerName));
         }
 
-        Optional<RequestConfig> requestConfig = addJerseyRequestConfig(jerseyRequest);
+        final Optional<RequestConfig> requestConfig = addJerseyRequestConfig(jerseyRequest);
         if (requestConfig.isPresent()) {
             builder.setConfig(requestConfig.get());
         }
@@ -148,7 +144,7 @@ public class DropwizardApacheConnector implements Connector {
         final Boolean followRedirects = clientRequest.resolveProperty(ClientProperties.FOLLOW_REDIRECTS, Boolean.class);
 
         if (timeout != null || connectTimeout != null || followRedirects != null) {
-            RequestConfig.Builder requestConfig = RequestConfig.copy(defaultRequestConfig);
+            final RequestConfig.Builder requestConfig = RequestConfig.copy(defaultRequestConfig);
 
             if (timeout != null) {
                 requestConfig.setSocketTimeout(timeout);
@@ -194,14 +190,11 @@ public class DropwizardApacheConnector implements Connector {
     @Override
     public Future<?> apply(final ClientRequest request, final AsyncConnectorCallback callback) {
         // Simulate an asynchronous execution
-        return MoreExecutors.newDirectExecutorService().submit(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    callback.response(apply(request));
-                } catch (Exception e) {
-                    callback.failure(e);
-                }
+        return MoreExecutors.newDirectExecutorService().submit((Runnable) () -> {
+            try {
+                callback.response(apply(request));
+            } catch (Exception e) {
+                callback.failure(e);
             }
         });
     }
@@ -219,11 +212,7 @@ public class DropwizardApacheConnector implements Connector {
      */
     @Override
     public void close() {
-        try {
-            client.close();
-        } catch (IOException e) {
-            throw new ProcessingException(LocalizationMessages.FAILED_TO_STOP_CLIENT(), e);
-        }
+        // Should not close the client here, because it's managed by the Dropwizard environment
     }
 
     /**
@@ -274,12 +263,7 @@ public class DropwizardApacheConnector implements Connector {
          */
         @Override
         public void writeTo(final OutputStream outputStream) throws IOException {
-            clientRequest.setStreamProvider(new OutboundMessageContext.StreamProvider() {
-                @Override
-                public OutputStream getOutputStream(int contentLength) throws IOException {
-                    return outputStream;
-                }
-            });
+            clientRequest.setStreamProvider(contentLength -> outputStream);
             clientRequest.writeEntity();
         }
 
@@ -308,12 +292,7 @@ public class DropwizardApacheConnector implements Connector {
 
         private BufferedJerseyRequestHttpEntity(ClientRequest clientRequest) {
             final ByteArrayOutputStream stream = new ByteArrayOutputStream(BUFFER_INITIAL_SIZE);
-            clientRequest.setStreamProvider(new OutboundMessageContext.StreamProvider() {
-                @Override
-                public OutputStream getOutputStream(int contentLength) throws IOException {
-                    return stream;
-                }
-            });
+            clientRequest.setStreamProvider(contentLength -> stream);
             try {
                 clientRequest.writeEntity();
             } catch (IOException e) {

@@ -1,6 +1,5 @@
 package io.dropwizard.validation.valuehandling;
 
-import com.google.common.base.Optional;
 import org.hibernate.validator.HibernateValidator;
 import org.hibernate.validator.valuehandling.UnwrapValidatedValue;
 import org.junit.Test;
@@ -10,7 +9,7 @@ import javax.validation.Validation;
 import javax.validation.Validator;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
-
+import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -21,7 +20,7 @@ public class OptionalValidatedValueUnwrapperTest {
 
         @Min(3)
         @UnwrapValidatedValue
-        public Optional<Integer> three = Optional.absent();
+        public Optional<Integer> three = Optional.empty();
 
         @NotNull
         @UnwrapValidatedValue
@@ -53,7 +52,7 @@ public class OptionalValidatedValueUnwrapperTest {
     @Test
     public void succeedsWhenPresentButNull() {
         Example example = new Example();
-        example.three = Optional.fromNullable(null);
+        example.three = Optional.ofNullable(null);
         Set<ConstraintViolation<Example>> violations = validator.validate(example);
         assertThat(violations).isEmpty();
     }
@@ -69,7 +68,7 @@ public class OptionalValidatedValueUnwrapperTest {
     @Test
     public void notNullFailsWhenAbsent() {
         Example example = new Example();
-        example.notNull = Optional.absent();
+        example.notNull = Optional.empty();
         Set<ConstraintViolation<Example>> violations = validator.validate(example);
         assertThat(violations).hasSize(1);
     }
@@ -77,7 +76,7 @@ public class OptionalValidatedValueUnwrapperTest {
     @Test
     public void notNullFailsWhenPresentButNull() {
         Example example = new Example();
-        example.notNull = Optional.fromNullable(null);
+        example.notNull = Optional.ofNullable(null);
         Set<ConstraintViolation<Example>> violations = validator.validate(example);
         assertThat(violations).hasSize(1);
     }

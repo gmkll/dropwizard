@@ -14,14 +14,11 @@ import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
 
 import javax.servlet.Servlet;
 import javax.validation.Validator;
-
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
-// TODO: 5/15/13 <coda> -- add tests for Environment
+import static java.util.Objects.requireNonNull;
 
 /**
  * A Dropwizard application's environment.
@@ -44,7 +41,7 @@ public class Environment {
 
     private final MutableServletContextHandler adminContext;
     private final AdminEnvironment adminEnvironment;
-    
+
     private final ExecutorService healthCheckExecutorService;
 
     /**
@@ -81,7 +78,7 @@ public class Environment {
 
 
         this.healthCheckExecutorService = this.lifecycle().executorService("TimeBoundHealthCheck-pool-%d")
-                .workQueue(new ArrayBlockingQueue<Runnable>(1))
+                .workQueue(new ArrayBlockingQueue<>(1))
                 .minThreads(1)
                 .maxThreads(4)
                 .threadFactory(new ThreadFactoryBuilder().setDaemon(true).build())
@@ -149,7 +146,7 @@ public class Environment {
      * Sets the application's {@link Validator}.
      */
     public void setValidator(Validator validator) {
-        this.validator = checkNotNull(validator);
+        this.validator = requireNonNull(validator);
     }
 
     /**
@@ -169,8 +166,6 @@ public class Environment {
     /*
     * Internal Accessors
     */
-
-    // TODO: 5/4/13 <coda> -- figure out how to make these accessors not a public API
 
     public MutableServletContextHandler getApplicationContext() {
         return servletContext;

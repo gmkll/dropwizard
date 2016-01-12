@@ -7,17 +7,17 @@ import io.dropwizard.jackson.Jackson;
 import io.dropwizard.logging.ConsoleAppenderFactory;
 import io.dropwizard.logging.FileAppenderFactory;
 import io.dropwizard.logging.SyslogAppenderFactory;
+import io.dropwizard.validation.BaseValidator;
 import org.junit.Before;
 import org.junit.Test;
 
-import javax.validation.Validation;
 import java.io.File;
 import java.util.TimeZone;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class RequestLogFactoryTest {
-    private RequestLogFactory requestLog;
+    private Slf4jRequestLogFactory slf4jRequestLog;
 
     @Before
     public void setUp() throws Exception {
@@ -25,16 +25,15 @@ public class RequestLogFactoryTest {
         objectMapper.getSubtypeResolver().registerSubtypes(ConsoleAppenderFactory.class,
                                                            FileAppenderFactory.class,
                                                            SyslogAppenderFactory.class);
-        this.requestLog = new ConfigurationFactory<>(RequestLogFactory.class,
-                                                     Validation.buildDefaultValidatorFactory()
-                                                                       .getValidator(),
+        this.slf4jRequestLog = new ConfigurationFactory<>(Slf4jRequestLogFactory.class,
+                                                     BaseValidator.newValidator(),
                                                      objectMapper, "dw")
                 .build(new File(Resources.getResource("yaml/requestLog.yml").toURI()));
     }
 
     @Test
     public void defaultTimeZoneIsUTC() {
-        assertThat(requestLog.getTimeZone())
+        assertThat(slf4jRequestLog.getTimeZone())
             .isEqualTo(TimeZone.getTimeZone("UTC"));
     }
 }

@@ -34,6 +34,11 @@ To create a :ref:`managed <man-core-managed>`, instrumented ``HttpClient`` insta
         public HttpClientConfiguration getHttpClientConfiguration() {
             return httpClient;
         }
+        
+        @JsonProperty("httpClient")
+        public void setHttpClientConfiguration(HttpClientConfiguration httpClient) {
+            this.httpClient = httpClient;
+        }
     }
 
 Then, in your application's ``run`` method, create a new ``HttpClientBuilder``:
@@ -119,7 +124,7 @@ If HttpClient_ is too low-level for you, Dropwizard also supports Jersey's `Clie
 Jersey's ``Client`` allows you to use all of the server-side media type support that your service
 uses to, for example, deserialize ``application/json`` request entities as POJOs.
 
-.. _Client API: https://jersey.java.net/documentation/1.18/client-api.html
+.. _Client API: https://jersey.java.net/documentation/2.22.1/client.html
 
 To create a :ref:`managed <man-core-managed>`, instrumented ``JerseyClient`` instance, your
 :ref:`configuration class <man-core-configuration>` needs an :ref:`jersey client configuration <man-configuration-clients-jersey>` instance:
@@ -159,8 +164,8 @@ Dropwizard, the default is 500 milliseconds.
 
 There are a couple of ways to change this behavior. The recommended way is to modify the
 :ref:`YAML configuration <man-configuration-clients-http>`. Alternatively, set the properties on
-the ``JerseyClientConfiguration``, which will take affect for all built clients. On a per client
-basis, the configuration can be changed through utilizing the ``property`` method and, in this case,
+the ``JerseyClientConfiguration``, which will take effect for all built clients. On a per client
+basis, the configuration can be changed by utilizing the ``property`` method and, in this case,
 the `Jersey Client Properties`_ can be used.
 
 .. warning::
@@ -173,4 +178,4 @@ the `Jersey Client Properties`_ can be used.
     ``HttpClientBuilder``, so the Jersey properties are ignored.
 
 .. _Jersey Client Configuration: https://jersey.java.net/documentation/latest/appendix-properties.html#appendix-properties-client
-.. _Jersey Client Properties: https://jersey.java.net/apidocs/2.19/jersey/org/glassfish/jersey/client/ClientProperties.html
+.. _Jersey Client Properties: https://jersey.java.net/apidocs/2.22/jersey/org/glassfish/jersey/client/ClientProperties.html

@@ -1,8 +1,7 @@
 package io.dropwizard.hibernate;
 
-import com.google.common.collect.Sets;
-import io.dropwizard.db.PooledDataSourceFactory;
 import io.dropwizard.db.ManagedDataSource;
+import io.dropwizard.db.PooledDataSourceFactory;
 import io.dropwizard.setup.Environment;
 import org.hibernate.SessionFactory;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
@@ -18,6 +17,7 @@ import javax.sql.DataSource;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
+import java.util.TreeSet;
 
 public class SessionFactoryFactory {
     private static final Logger LOGGER = LoggerFactory.getLogger(SessionFactoryFactory.class);
@@ -91,12 +91,17 @@ public class SessionFactoryFactory {
                 .applySettings(properties)
                 .build();
 
+        configure(configuration, registry);
+
         return configuration.buildSessionFactory(registry);
+    }
+
+    protected void configure(Configuration configuration, ServiceRegistry registry) {
     }
 
     private void addAnnotatedClasses(Configuration configuration,
                                      Iterable<Class<?>> entities) {
-        final SortedSet<String> entityClasses = Sets.newTreeSet();
+        final SortedSet<String> entityClasses = new TreeSet<>();
         for (Class<?> klass : entities) {
             configuration.addAnnotatedClass(klass);
             entityClasses.add(klass.getCanonicalName());

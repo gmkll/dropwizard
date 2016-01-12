@@ -1,14 +1,13 @@
 package io.dropwizard.jersey.setup;
 
 import com.google.common.base.Function;
-import javax.servlet.Servlet;
-import org.glassfish.jersey.server.ResourceConfig;
-import org.glassfish.jersey.servlet.ServletContainer;
 import io.dropwizard.jersey.DropwizardResourceConfig;
+import org.glassfish.jersey.server.ResourceConfig;
 
 import javax.annotation.Nullable;
+import javax.servlet.Servlet;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
 public class JerseyEnvironment {
     private final JerseyContainerHolder holder;
@@ -34,7 +33,7 @@ public class JerseyEnvironment {
      * @param component a Jersey singleton component
      */
     public void register(Object component) {
-        config.register(checkNotNull(component));
+        config.register(requireNonNull(component));
     }
 
     /**
@@ -44,7 +43,7 @@ public class JerseyEnvironment {
      * @param componentClass a Jersey component class
      */
     public void register(Class<?> componentClass) {
-        config.register(checkNotNull(componentClass));
+        config.register(requireNonNull(componentClass));
     }
 
     /**
@@ -54,7 +53,7 @@ public class JerseyEnvironment {
      * @param packages array of package names
      */
     public void packages(String... packages) {
-        config.packages(checkNotNull(packages));
+        config.packages(requireNonNull(packages));
     }
 
     /**
@@ -64,7 +63,7 @@ public class JerseyEnvironment {
      * @see org.glassfish.jersey.server.ResourceConfig
      */
     public void enable(String featureName) {
-        config.property(checkNotNull(featureName), Boolean.TRUE);
+        config.property(requireNonNull(featureName), Boolean.TRUE);
     }
 
     /**
@@ -74,7 +73,7 @@ public class JerseyEnvironment {
      * @see org.glassfish.jersey.server.ResourceConfig
      */
     public void disable(String featureName) {
-        config.property(checkNotNull(featureName), Boolean.FALSE);
+        config.property(requireNonNull(featureName), Boolean.FALSE);
     }
 
     /**
@@ -85,7 +84,7 @@ public class JerseyEnvironment {
      * @see org.glassfish.jersey.server.ResourceConfig
      */
     public void property(String name, @Nullable Object value) {
-        config.property(checkNotNull(name), value);
+        config.property(requireNonNull(name), value);
     }
 
     /**

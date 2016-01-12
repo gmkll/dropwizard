@@ -17,8 +17,8 @@ Testing Representations
 =======================
 
 While Jackson's JSON support is powerful and fairly easy-to-use, you shouldn't just rely on
-eyeballing your representation classes to ensure you're actually producing the API you think you
-are. By using the helper methods in `FixtureHelpers` you can add unit tests for serializing and
+eyeballing your representation classes to ensure you're producing the API you think you
+are. By using the helper methods in `FixtureHelpers`, you can add unit tests for serializing and
 deserializing your representation classes to and from JSON.
 
 Let's assume we have a ``Person`` class which your API uses as both a request entity (e.g., when
@@ -177,6 +177,10 @@ loads a given resource instance in an in-memory Jersey server:
         @Before
         public void setup() {
             when(dao.fetchPerson(eq("blah"))).thenReturn(person);
+        }
+
+        @After
+        public void tearDown(){
             // we have to reset the mock after each test because of the
             // @ClassRule, or use a @Rule as mentioned below.
             reset(dao);
@@ -211,11 +215,23 @@ easily.
 
     You can trust ``PeopleStore`` works because you've got working unit tests for it, right?
 
+Default Exception Mappers
+-------------------------
+
+By default, a ``ResourceTestRule`` will register all the default exception mappers (this behavior is new in 1.0). If
+``registerDefaultExceptionMappers`` in the configuration yaml is planned to be set to ``false``,
+``ResourceTestRule.Builder#setRegisterDefaultExceptionMappers(boolean)`` will also need to be set to ``false``. Then,
+all custom exception mappers will need to be registered on the builder, similarly to how they are registered in an
+``Application`` class.
+
+Test Containers
+---------------
+
 Note that the in-memory Jersey test container does not support all features, such as the ``@Context`` injection used by
 ``BasicAuthFactory`` and ``OAuthFactory``. A different `test container`__ can be used via
 ``ResourceTestRule.Builder#setTestContainerFactory(TestContainerFactory)``.
 
-For example if you want to use the `Grizzly`_ HTTP server (which supports ``@Context`` injections) you need to add the
+For example, if you want to use the `Grizzly`_ HTTP server (which supports ``@Context`` injections) you need to add the
 dependency for the Jersey Test Framework providers to your Maven POM and set ``GrizzlyWebTestContainerFactory`` as
 ``TestContainerFactory`` in your test classes.
 
@@ -264,7 +280,7 @@ dependency for the Jersey Test Framework providers to your Maven POM and set ``G
 Testing Client Implementations
 ==============================
 
-In order to avoid circular dependencies in your projects or to speed up test runs, you can test your HTTP client code
+To avoid circular dependencies in your projects or to speed up test runs, you can test your HTTP client code
 by writing a JAX-RS resource as test double and let the ``DropwizardClientRule`` start and stop a simple Dropwizard
 application containing your test doubles.
 
@@ -310,8 +326,11 @@ The ``DropwizardClientRule`` takes care of:
 Integration Testing
 ===================
 
-It can be useful to start up your entire app and hit it with real HTTP requests during testing. This can be
-achieved by adding ``DropwizardAppRule`` to your JUnit test class, which will start the app prior to any tests
+It can be useful to start up your entire app and hit it with real HTTP requests during testing.
+
+JUnit
+-----
+Adding ``DropwizardAppRule`` to your JUnit test class will start the app prior to any tests
 running and stop it again when they've completed (roughly equivalent to having used ``@BeforeClass`` and ``@AfterClass``).
 ``DropwizardAppRule`` also exposes the app's ``Configuration``,
 ``Environment`` and the app object itself so that these can be queried by the tests.
@@ -327,6 +346,40 @@ running and stop it again when they've completed (roughly equivalent to having u
         @Test
         public void loginHandlerRedirectsAfterPost() {
             Client client = new JerseyClientBuilder(RULE.getEnvironment()).build("test client");
+
+            Response response = client.target(
+                     String.format("http://localhost:%d/login", RULE.getLocalPort()))
+                    .request()
+                    .post(Entity.json(loginForm()));
+
+            assertThat(response.getStatus()).isEqualTo(302);
+        }
+    }
+
+Non-JUnit
+---------
+By creating a DropwizardTestSupport instance in your test you can manually start and stop the app in your tests, you do this by calling its ``before`` and ``after`` methods. ``DropwizardTestSupport`` also exposes the app's ``Configuration``, ``Environment`` and the app object itself so that these can be queried by the tests.
+
+.. code-block:: java
+
+    public class LoginAcceptanceTest {
+
+        public static final DropwizardTestSupport<TestConfiguration> SUPPORT =
+                new DropwizardTestSupport<TestConfiguration>(MyApp.class, ResourceHelpers.resourceFilePath("my-app-config.yaml"));
+
+        @BeforeClass
+        public void beforeClass() {
+          SUPPORT.before();
+        }
+
+        @AfterClass
+        public void afterClass() {
+          SUPPORT.after();
+        }
+
+        @Test
+        public void loginHandlerRedirectsAfterPost() {
+            Client client = new JerseyClientBuilder(SUPPORT.getEnvironment()).build("test client");
 
             Response response = client.target(
                      String.format("http://localhost:%d/login", RULE.getLocalPort()))

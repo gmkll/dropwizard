@@ -6,7 +6,7 @@ Dropwizard Views
 
 .. highlight:: text
 
-.. rubric:: The ``dropwizard-views-mustache`` & ``dropwizard-views-freemarker`` modules provides you with simple, fast HTML views using either FreeMarker_ or Mustache_.
+.. rubric:: The ``dropwizard-views-mustache`` & ``dropwizard-views-freemarker`` modules provide you with simple, fast HTML views using either FreeMarker_ or Mustache_.
 
 .. _FreeMarker: http://FreeMarker.sourceforge.net/
 .. _Mustache: http://mustache.github.com/mustache.5.html
@@ -117,3 +117,12 @@ For more information on how to use FreeMarker, see the `FreeMarker`_ documentati
 For more information on how to use Mustache, see the `Mustache`_ and `Mustache.java`_ documentation.
 
  .. _Mustache.java: https://github.com/spullara/mustache.java
+
+.. _man-views-template-errors:
+
+Template Errors
+===============
+
+If there is an error with the template (eg. the template file is not found or there is a compilation
+error with the template), the user will receive a ``500 Internal Sever Error`` with a generic HTML
+message. The exact error will logged under debug mode.

@@ -4,10 +4,10 @@ import com.google.common.base.Optional;
 import com.google.common.io.Resources;
 import io.dropwizard.configuration.ConfigurationFactory;
 import io.dropwizard.jackson.Jackson;
+import io.dropwizard.jersey.validation.Validators;
 import io.dropwizard.util.Duration;
 import org.junit.Test;
 
-import javax.validation.Validation;
 import java.io.File;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,6 +34,8 @@ public class DataSourceConfigurationTest {
         assertThat(ds.getValidationInterval()).isEqualTo(Duration.minutes(1));
         assertThat(ds.isAutoCommentsEnabled()).isFalse();
         assertThat(ds.getReadOnlyByDefault()).isFalse();
+        assertThat(ds.isRemoveAbandoned()).isTrue();
+        assertThat(ds.getRemoveAbandonedTimeout()).isEqualTo(Duration.seconds(15L));
         assertThat(ds.getAbandonWhenPercentageFull()).isEqualTo(75);
         assertThat(ds.isAlternateUsernamesAllowed()).isTrue();
         assertThat(ds.getCommitOnReturn()).isTrue();
@@ -73,6 +75,8 @@ public class DataSourceConfigurationTest {
         assertThat(ds.getValidationInterval()).isEqualTo(Duration.seconds(30));
         assertThat(ds.isAutoCommentsEnabled()).isTrue();
         assertThat(ds.getReadOnlyByDefault()).isNull();
+        assertThat(ds.isRemoveAbandoned()).isFalse();
+        assertThat(ds.getRemoveAbandonedTimeout()).isEqualTo(Duration.seconds(60L));
         assertThat(ds.getAbandonWhenPercentageFull()).isEqualTo(0);
         assertThat(ds.isAlternateUsernamesAllowed()).isFalse();
         assertThat(ds.getCommitOnReturn()).isFalse();
@@ -91,9 +95,19 @@ public class DataSourceConfigurationTest {
         assertThat(ds.getValidationQueryTimeout()).isEqualTo(Optional.absent());
     }
 
+    @Test
+    public void testInlineUserPasswordConfiguration() throws Exception {
+        DataSourceFactory ds = getDataSourceFactory("yaml/inline_user_pass_db_pool.yml");
+
+        assertThat(ds.getDriverClass()).isEqualTo("org.postgresql.Driver");
+        assertThat(ds.getUrl()).isEqualTo("jdbc:postgresql://db.example.com/db-prod?user=scott&password=tiger");
+        assertThat(ds.getUser()).isNull();
+        assertThat(ds.getPassword()).isNull();
+    }
+
     private DataSourceFactory getDataSourceFactory(String resourceName) throws Exception {
         return new ConfigurationFactory<>(DataSourceFactory.class,
-                Validation.buildDefaultValidatorFactory().getValidator(), Jackson.newObjectMapper(), "dw")
+                Validators.newValidator(), Jackson.newObjectMapper(), "dw")
                 .build(new File(Resources.getResource(resourceName).toURI()));
     }
 }

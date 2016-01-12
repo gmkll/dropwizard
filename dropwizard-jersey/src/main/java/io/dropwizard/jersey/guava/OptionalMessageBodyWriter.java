@@ -6,7 +6,6 @@ import org.glassfish.jersey.message.MessageBodyWorkers;
 import javax.inject.Inject;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.Produces;
-import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.ext.MessageBodyWriter;
@@ -51,12 +50,12 @@ public class OptionalMessageBodyWriter implements MessageBodyWriter<Optional<?>>
             throw new NotFoundException();
         }
 
-        ParameterizedType actualGenericType = (ParameterizedType) genericType;
-
-        MessageBodyWriter writer = mbw.get().getMessageBodyWriter(entity.get().getClass(),
-                actualGenericType.getActualTypeArguments()[0], annotations, mediaType);
+        final ParameterizedType actualGenericType = (ParameterizedType) genericType;
+        final Type actualGenericTypeArgument = actualGenericType.getActualTypeArguments()[0];
+        final MessageBodyWriter writer = mbw.get().getMessageBodyWriter(entity.get().getClass(),
+                actualGenericTypeArgument, annotations, mediaType);
         writer.writeTo(entity.get(), entity.get().getClass(),
-                actualGenericType.getActualTypeArguments()[0],
+                actualGenericTypeArgument,
                 annotations, mediaType, httpHeaders, entityStream);
     }
 

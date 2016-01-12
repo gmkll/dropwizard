@@ -6,9 +6,7 @@ import com.codahale.metrics.Timer;
 import com.codahale.metrics.annotation.ExceptionMetered;
 import com.codahale.metrics.annotation.Metered;
 import com.codahale.metrics.annotation.Timed;
-import static com.codahale.metrics.MetricRegistry.name;
 import com.google.common.collect.ImmutableMultimap;
-import com.google.common.collect.Maps;
 import com.google.common.net.MediaType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +20,10 @@ import java.io.PrintWriter;
 import java.lang.reflect.Method;
 import java.util.Collection;
 import java.util.Enumeration;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+
+import static com.codahale.metrics.MetricRegistry.name;
 
 /**
  * A servlet which provides access to administrative {@link Task}s. It only responds to {@code POST}
@@ -44,8 +45,8 @@ public class TaskServlet extends HttpServlet {
      */
     public TaskServlet(MetricRegistry metricRegistry) {
         this.metricRegistry = metricRegistry;
-        this.tasks = Maps.newConcurrentMap();
-        this.taskExecutors = Maps.newConcurrentMap();
+        this.tasks = new ConcurrentHashMap<>();
+        this.taskExecutors = new ConcurrentHashMap<>();
     }
 
     public void add(Task task) {
@@ -53,35 +54,32 @@ public class TaskServlet extends HttpServlet {
 
         TaskExecutor taskExecutor = new TaskExecutor(task);
         try {
-            Method executeMethod = task.getClass().getMethod("execute",
+            final Method executeMethod = task.getClass().getMethod("execute",
                     ImmutableMultimap.class, PrintWriter.class);
 
             if (executeMethod.isAnnotationPresent(Timed.class)) {
-                Timed annotation = executeMethod.getAnnotation(Timed.class);
-                String name = chooseName(annotation.name(),
+                final Timed annotation = executeMethod.getAnnotation(Timed.class);
+                final String name = chooseName(annotation.name(),
                         annotation.absolute(),
                         task);
-                Timer timer = metricRegistry.timer(name);
-                taskExecutor = new TimedTask(taskExecutor, timer);
+                taskExecutor = new TimedTask(taskExecutor, metricRegistry.timer(name));
             }
 
             if (executeMethod.isAnnotationPresent(Metered.class)) {
-                Metered annotation = executeMethod.getAnnotation(Metered.class);
-                String name = chooseName(annotation.name(),
+                final Metered annotation = executeMethod.getAnnotation(Metered.class);
+                final String name = chooseName(annotation.name(),
                                         annotation.absolute(),
                                         task);
-                Meter meter = metricRegistry.meter(name);
-                taskExecutor = new MeteredTask(taskExecutor, meter);
+                taskExecutor = new MeteredTask(taskExecutor, metricRegistry.meter(name));
             }
 
             if (executeMethod.isAnnotationPresent(ExceptionMetered.class)) {
-                ExceptionMetered annotation = executeMethod.getAnnotation(ExceptionMetered.class);
-                String name = chooseName(annotation.name(),
+                final ExceptionMetered annotation = executeMethod.getAnnotation(ExceptionMetered.class);
+                final String name = chooseName(annotation.name(),
                                         annotation.absolute(),
                                         task,
                                         ExceptionMetered.DEFAULT_NAME_SUFFIX);
-                Meter exceptionMeter = metricRegistry.meter(name);
-                taskExecutor = new ExceptionMeteredTask(taskExecutor, exceptionMeter, annotation.cause());
+                taskExecutor = new ExceptionMeteredTask(taskExecutor, metricRegistry.meter(name), annotation.cause());
             }
         } catch (NoSuchMethodException ignored) {
         }
@@ -97,7 +95,7 @@ public class TaskServlet extends HttpServlet {
             resp.setContentType(MediaType.PLAIN_TEXT_UTF_8.toString());
             final PrintWriter output = resp.getWriter();
             try {
-                TaskExecutor taskExecutor = taskExecutors.get(task);
+                final TaskExecutor taskExecutor = taskExecutors.get(task);
                 taskExecutor.executeTask(getParams(req), output);
             } catch (Exception e) {
                 LOGGER.error("Error running {}", task.getName(), e);
@@ -211,9 +209,11 @@ public class TaskServlet extends HttpServlet {
             try {
                 underlying.executeTask(params, output);
             } catch (Exception e) {
-                if (exceptionMeter != null && exceptionClass.isAssignableFrom(e.getClass()) ||
-                        (e.getCause() != null && exceptionClass.isAssignableFrom(e.getCause().getClass()))) {
-                    exceptionMeter.mark();
+                if (exceptionMeter != null) {
+                    if (exceptionClass.isAssignableFrom(e.getClass()) ||
+                            (e.getCause() != null && exceptionClass.isAssignableFrom(e.getCause().getClass()))) {
+                        exceptionMeter.mark();
+                    }
                 }
 
                 throw e;

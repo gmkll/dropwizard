@@ -82,7 +82,7 @@ class by mapping YAML field names to object field names.
     If your configuration file doesn't end in ``.yml`` or ``.yaml``, Dropwizard tries to parse it
     as a JSON file.
 
-In order to keep your configuration file and class manageable, we recommend grouping related
+To keep your configuration file and class manageable, we recommend grouping related
 configuration parameters into independent configuration classes. If your application requires a set of
 configuration parameters in order to connect to a message queue, for example, we recommend that you
 create a new ``MessageQueueFactory`` class:
@@ -128,7 +128,7 @@ create a new ``MessageQueueFactory`` class:
                 public void stop() {
                     client.close();
                 }
-            };
+            });
             return client;
         }
     }
@@ -672,8 +672,9 @@ A few items of note:
 Configuration
 -------------
 
-You can specify a default logger level and even override the levels of
-other loggers in your YAML configuration file:
+You can specify a default logger level, override the levels of other loggers in your YAML configuration file,
+and even specify appenders for them. The latter form of configuration is preferable, but the former is also
+acceptable.
 
 .. code-block:: yaml
 
@@ -689,6 +690,16 @@ other loggers in your YAML configuration file:
         # Overrides the level of com.example.dw.Thing and sets it to DEBUG.
         "com.example.dw.Thing": DEBUG
 
+        # Enables the SQL query log and redirect it to a separate file
+        "org.hibernate.SQL":
+          level: DEBUG
+          # This line stops org.hibernate.SQL (or anything under it) from using the root logger
+          additive: false
+          appenders:
+            - type: file
+              currentLogFilename: ./logs/example-sql.log
+              archivedLogFilenamePattern: ./logs/example-sql-%d.log.gz
+              archivedFileCount: 5
 .. _man-core-logging-console:
 
 Console Logging
@@ -792,6 +803,19 @@ appender with different configurations:
           currentLogFilename: ./logs/debug.log
           archivedLogFilenamePattern: ./logs/debug-%d{yyyy-MM-dd-hh}.log.gz
           archivedFileCount: 6
+
+.. _man-core-logging-http-config:
+
+Logging Configuration via HTTP
+------------------------------
+
+Active log levels can be changed during the runtime of a Dropwizard application via HTTP using
+the ``LogConfigurationTask``. For instance, to configure the log level for a
+single ``Logger``:
+
+.. code-block:: shell
+
+    curl -X POST -d "logger=com.example.helloworld&level=INFO" http://localhost:8081/tasks/log-level
 
 .. _man-core-testing-applications:
 
@@ -940,7 +964,7 @@ Methods on a resource class which accept incoming requests are annotated with th
 handle: ``@GET``, ``@POST``, ``@PUT``, ``@DELETE``, ``@HEAD``, ``@OPTIONS``, ``@PATCH``.
 
 Support for arbitrary new methods can be added via the ``@HttpMethod`` annotation. They also must
-to be added to the :ref:`list of allowed methods <man-configuration-all>`. This means, by default,
+be added to the :ref:`list of allowed methods <man-configuration-all>`. This means, by default,
 methods such as ``CONNECT`` and ``TRACE`` are blocked, and will return a ``405 Method Not Allowed``
 response.
 
@@ -1382,7 +1406,7 @@ specification for which paths this filter should active. Here's an example:
 
 .. code-block:: java
 
-        environment.servlets().addFilter("DateHeaderServletFilter", new DateHeaderServletFilter())
+        environment.servlets().addFilter("DateNotSpecifiedServletFilter", new DateNotSpecifiedServletFilter())
                               .addMappingForUrlPatterns(EnumSet.of(DispatcherType.REQUEST), true, "/*");
 .. _man-glue-detail:
 
@@ -1405,6 +1429,6 @@ your application resources are served from one ``Servlet``
 enable the following functionality:
 
     * Resource method requests with ``@Timed``, ``@Metered``, ``@ExceptionMetered`` are delegated to special dispatchers which decorate the metric telemetry
-    * Resources that return Guava Optional are unboxed. Present returns underlying type, and non present 404s
+    * Resources that return Guava Optional are unboxed. Present returns underlying type, and non-present 404s
     * Resource methods that are annotated with ``@CacheControl`` are delegated to a special dispatcher that decorates on the cache control headers
     * Enables using Jackson to parse request entities into objects and generate response entities from objects, all while performing validation

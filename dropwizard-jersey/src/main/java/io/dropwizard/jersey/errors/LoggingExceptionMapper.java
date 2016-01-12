@@ -16,21 +16,37 @@ public abstract class LoggingExceptionMapper<E extends Throwable> implements Exc
 
     @Override
     public Response toResponse(E exception) {
+        final int status;
+        final ErrorMessage errorMessage;
+
         if (exception instanceof WebApplicationException) {
-            return ((WebApplicationException) exception).getResponse();
+            final Response response = ((WebApplicationException) exception).getResponse();
+            if (response.getStatusInfo().getFamily().equals(Response.Status.Family.SERVER_ERROR)) {
+                logException(exception);
+            }
+            status = response.getStatus();
+            errorMessage = new ErrorMessage(status, exception.getLocalizedMessage());
+        } else {
+            final long id = logException(exception);
+            status = Response.Status.INTERNAL_SERVER_ERROR.getStatusCode();
+            errorMessage = new ErrorMessage(formatErrorMessage(id, exception));
         }
 
-        final long id = ThreadLocalRandom.current().nextLong();
-        logException(id, exception);
-        return Response.serverError()
+        return Response.status(status)
                 .type(MediaType.APPLICATION_JSON_TYPE)
-                .entity(new ErrorMessage(formatErrorMessage(id, exception)))
+                .entity(errorMessage)
                 .build();
     }
 
     @SuppressWarnings("UnusedParameters")
     protected String formatErrorMessage(long id, E exception) {
         return String.format("There was an error processing your request. It has been logged (ID %016x).", id);
+    }
+
+    protected long logException(E exception) {
+        final long id = ThreadLocalRandom.current().nextLong();
+        logException(id, exception);
+        return id;
     }
 
     protected void logException(long id, E exception) {

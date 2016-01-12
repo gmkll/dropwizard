@@ -5,7 +5,6 @@ import java.util.zip.GZIPInputStream;
 
 import javax.annotation.Priority;
 import javax.ws.rs.Priorities;
-import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.ext.Provider;
 import javax.ws.rs.ext.ReaderInterceptor;
@@ -31,7 +30,7 @@ public class GZipDecoder implements ReaderInterceptor {
             context.getHeaders().add(HttpHeaders.ACCEPT_ENCODING, "gzip");
         }
 
-        String contentEncoding = context.getHeaders().getFirst(HttpHeaders.CONTENT_ENCODING);
+        final String contentEncoding = context.getHeaders().getFirst(HttpHeaders.CONTENT_ENCODING);
         if (contentEncoding != null &&
                 (contentEncoding.equals("gzip") || contentEncoding.equals("x-gzip"))) {
             context.setInputStream(new GZIPInputStream(context.getInputStream()));

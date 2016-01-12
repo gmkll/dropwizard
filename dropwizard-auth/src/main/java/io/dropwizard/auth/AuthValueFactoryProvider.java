@@ -48,45 +48,34 @@ public class AuthValueFactoryProvider<T extends Principal> extends AbstractValue
      * the type {@link T} being annotated with {@link Auth} annotation.
      *
      * @param parameter parameter that was annotated for being injected
-     * @return the factory if parameter matched type
+     * @return the factory if annotated parameter matched type
      */
     @Override
     public AbstractContainerRequestValueFactory<?> createValueFactory(Parameter parameter) {
-        if (!principalClass.equals(parameter.getRawType())) {
+        if (!parameter.isAnnotationPresent(Auth.class) || !principalClass.equals(parameter.getRawType())) {
             return null;
+        } else {
+            return new PrincipalContainerRequestValueFactory();
         }
-        return new AbstractContainerRequestValueFactory<Principal>() {
-
-            /**
-             * @return {@link Principal} stored on the request, or {@code null} if no object was found.
-             */
-            public Principal provide() {
-                final Principal principal = getContainerRequest().getSecurityContext().getUserPrincipal();
-                if (principal == null) {
-                    throw new IllegalStateException("Cannot inject a custom principal into unauthenticated request");
-                }
-                return principal;
-            }
-        };
     }
 
     @Singleton
-    private static class AuthInjectionResolver extends ParamInjectionResolver<Auth> {
+    static class AuthInjectionResolver extends ParamInjectionResolver<Auth> {
 
         /**
          * Create new {@link Auth} annotation injection resolver.
          */
-        public AuthInjectionResolver() {
+        AuthInjectionResolver() {
             super(AuthValueFactoryProvider.class);
         }
     }
 
     @Singleton
-    private static class PrincipalClassProvider<T extends Principal> {
+    static class PrincipalClassProvider<T extends Principal> {
 
         private final Class<T> clazz;
 
-        public PrincipalClassProvider(Class<T> clazz) {
+        PrincipalClassProvider(Class<T> clazz) {
             this.clazz = clazz;
         }
     }

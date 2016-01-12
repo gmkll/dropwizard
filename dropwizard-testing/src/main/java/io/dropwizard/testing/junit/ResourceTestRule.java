@@ -3,14 +3,15 @@ package io.dropwizard.testing.junit;
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.jersey.DropwizardResourceConfig;
+import io.dropwizard.jersey.errors.EarlyEofExceptionMapper;
+import io.dropwizard.jersey.errors.LoggingExceptionMapper;
 import io.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
+import io.dropwizard.jersey.jackson.JsonProcessingExceptionMapper;
+import io.dropwizard.jersey.validation.HibernateValidationFeature;
+import io.dropwizard.jersey.validation.JerseyViolationExceptionMapper;
 import io.dropwizard.jersey.validation.Validators;
-import io.dropwizard.jersey.validation.ConstraintViolationExceptionMapper;
 import io.dropwizard.logging.BootstrapLogging;
 import org.glassfish.jersey.client.ClientConfig;
 import org.glassfish.jersey.server.ServerProperties;
@@ -28,8 +29,12 @@ import javax.servlet.ServletConfig;
 import javax.validation.Validator;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.core.Context;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+
+import static java.util.Objects.requireNonNull;
 
 /**
  * A JUnit {@link TestRule} for testing Jersey resources.
@@ -42,12 +47,13 @@ public class ResourceTestRule implements TestRule {
 
     public static class Builder {
 
-        private final Set<Object> singletons = Sets.newHashSet();
-        private final Set<Class<?>> providers = Sets.newHashSet();
-        private final Map<String, Object> properties = Maps.newHashMap();
+        private final Set<Object> singletons = new HashSet<>();
+        private final Set<Class<?>> providers = new HashSet<>();
+        private final Map<String, Object> properties = new HashMap<>();
         private ObjectMapper mapper = Jackson.newObjectMapper();
         private Validator validator = Validators.newValidator();
         private TestContainerFactory testContainerFactory = new InMemoryTestContainerFactory();
+        private boolean registerDefaultExceptionMappers = true;
 
         public Builder setMapper(ObjectMapper mapper) {
             this.mapper = mapper;
@@ -84,8 +90,13 @@ public class ResourceTestRule implements TestRule {
             return this;
         }
 
+        public Builder setRegisterDefaultExceptionMappers(boolean value) {
+            registerDefaultExceptionMappers = value;
+            return this;
+        }
+
         public ResourceTestRule build() {
-            return new ResourceTestRule(singletons, providers, properties, mapper, validator, testContainerFactory);
+            return new ResourceTestRule(singletons, providers, properties, mapper, validator, testContainerFactory, registerDefaultExceptionMappers);
         }
     }
 
@@ -99,6 +110,7 @@ public class ResourceTestRule implements TestRule {
     private final ObjectMapper mapper;
     private final Validator validator;
     private final TestContainerFactory testContainerFactory;
+    private final boolean registerDefaultExceptionMappers;
 
     private JerseyTest test;
 
@@ -107,13 +119,15 @@ public class ResourceTestRule implements TestRule {
                              Map<String, Object> properties,
                              ObjectMapper mapper,
                              Validator validator,
-                             TestContainerFactory testContainerFactory) {
+                             TestContainerFactory testContainerFactory,
+                             boolean registerDefaultExceptionMappers) {
         this.singletons = singletons;
         this.providers = providers;
         this.properties = properties;
         this.mapper = mapper;
         this.validator = validator;
         this.testContainerFactory = testContainerFactory;
+        this.registerDefaultExceptionMappers = registerDefaultExceptionMappers;
     }
 
     public Validator getValidator() {
@@ -134,7 +148,7 @@ public class ResourceTestRule implements TestRule {
 
     public static class ResourceTestResourceConfig extends DropwizardResourceConfig {
         private static final String RULE_ID = "io.dropwizard.testing.junit.resourceTestRuleId";
-        private static final Map<String, ResourceTestRule> RULE_ID_TO_RULE = Maps.newHashMap();
+        private static final Map<String, ResourceTestRule> RULE_ID_TO_RULE = new HashMap<>();
 
         public ResourceTestResourceConfig(final String ruleId, final ResourceTestRule resourceTestRule) {
             super(true, new MetricRegistry());
@@ -144,16 +158,22 @@ public class ResourceTestRule implements TestRule {
 
         public ResourceTestResourceConfig(@Context ServletConfig servletConfig) {
             super(true, new MetricRegistry());
-            String ruleId = servletConfig.getInitParameter(RULE_ID);
-            Preconditions.checkNotNull(ruleId);
+            final String ruleId = servletConfig.getInitParameter(RULE_ID);
+            requireNonNull(ruleId);
 
-            ResourceTestRule resourceTestRule = RULE_ID_TO_RULE.get(ruleId);
-            Preconditions.checkNotNull(resourceTestRule);
+            final ResourceTestRule resourceTestRule = RULE_ID_TO_RULE.get(ruleId);
+            requireNonNull(resourceTestRule);
             configure(resourceTestRule);
         }
 
         private void configure(final ResourceTestRule resourceTestRule) {
-            register(new ConstraintViolationExceptionMapper());
+            if (resourceTestRule.registerDefaultExceptionMappers) {
+                register(new LoggingExceptionMapper<Throwable>() {
+                });
+                register(new JerseyViolationExceptionMapper());
+                register(new JsonProcessingExceptionMapper());
+                register(new EarlyEofExceptionMapper());
+            }
             for (Class<?> provider : resourceTestRule.providers) {
                 register(provider);
             }
@@ -161,7 +181,8 @@ public class ResourceTestRule implements TestRule {
             for (Map.Entry<String, Object> property : resourceTestRule.properties.entrySet()) {
                 property(property.getKey(), property.getValue());
             }
-            register(new JacksonMessageBodyProvider(resourceTestRule.mapper, resourceTestRule.validator));
+            register(new JacksonMessageBodyProvider(resourceTestRule.mapper));
+            register(new HibernateValidationFeature(resourceTestRule.validator));
             for (Object singleton : resourceTestRule.singletons) {
                 register(singleton);
             }
@@ -184,16 +205,16 @@ public class ResourceTestRule implements TestRule {
 
                         @Override
                         protected DeploymentContext configureDeployment() {
-                            final ResourceTestResourceConfig resourceConfig = new ResourceTestResourceConfig(ruleId, rule);
-                            return ServletDeploymentContext.builder(resourceConfig)
-                                    .initParam(ServletProperties.JAXRS_APPLICATION_CLASS, ResourceTestResourceConfig.class.getName())
+                            return ServletDeploymentContext.builder(new ResourceTestResourceConfig(ruleId, rule))
+                                    .initParam(ServletProperties.JAXRS_APPLICATION_CLASS,
+                                            ResourceTestResourceConfig.class.getName())
                                     .initParam(ResourceTestResourceConfig.RULE_ID, ruleId)
                                     .build();
                         }
 
                         @Override
                         protected void configureClient(final ClientConfig config) {
-                            JacksonJsonProvider jsonProvider = new JacksonJsonProvider();
+                            final JacksonJsonProvider jsonProvider = new JacksonJsonProvider();
                             jsonProvider.setMapper(mapper);
                             config.register(jsonProvider);
                         }
@@ -202,9 +223,7 @@ public class ResourceTestRule implements TestRule {
                     base.evaluate();
                 } finally {
                     ResourceTestResourceConfig.RULE_ID_TO_RULE.remove(ruleId);
-                    if (test != null) {
-                        test.tearDown();
-                    }
+                    test.tearDown();
                 }
             }
         };

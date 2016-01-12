@@ -10,7 +10,6 @@ import io.dropwizard.util.Generics;
 
 import java.io.IOException;
 
-import javax.validation.Validation;
 import javax.validation.Validator;
 
 import net.sourceforge.argparse4j.inf.Namespace;
@@ -110,7 +109,8 @@ public abstract class ConfiguredCommand<T extends Configuration> extends Command
                                  String path,
                                  Class<T> klass,
                                  ObjectMapper objectMapper) throws IOException, ConfigurationException {
-        final ConfigurationFactory<T> configurationFactory = configurationFactoryFactory.create(klass, validator, objectMapper, "dw");
+        final ConfigurationFactory<T> configurationFactory = configurationFactoryFactory
+                .create(klass, validator, objectMapper, "dw");
         if (path != null) {
             return configurationFactory.build(provider, path);
         }

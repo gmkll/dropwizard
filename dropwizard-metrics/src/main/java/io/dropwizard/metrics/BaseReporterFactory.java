@@ -3,6 +3,7 @@ package io.dropwizard.metrics;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.ScheduledReporter;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Optional;
 import com.google.common.cache.CacheBuilder;
@@ -10,6 +11,8 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableSet;
 import io.dropwizard.util.Duration;
+import io.dropwizard.validation.MinDuration;
+import org.hibernate.validator.valuehandling.UnwrapValidatedValue;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
@@ -85,8 +88,9 @@ public abstract class BaseReporterFactory implements ReporterFactory {
     @NotNull
     private ImmutableSet<String> includes = ImmutableSet.of();
 
-    @NotNull
     @Valid
+    @MinDuration(0)
+    @UnwrapValidatedValue
     private Optional<Duration> frequency = Optional.absent();
 
     private boolean useRegexFilters = false;
@@ -171,18 +175,16 @@ public abstract class BaseReporterFactory implements ReporterFactory {
      * @see #getIncludes()
      * @see #getExcludes()
      */
+    @JsonIgnore
     public MetricFilter getFilter() {
         final StringMatchingStrategy stringMatchingStrategy = getUseRegexFilters() ?
                 REGEX_STRING_MATCHING_STRATEGY : DEFAULT_STRING_MATCHING_STRATEGY;
 
-        return new MetricFilter() {
-            @Override
-            public boolean matches(final String name, final Metric metric) {
-                // Include the metric if its name is not excluded and its name is included
-                // Where, by default, with no includes setting, all names are included.
-                return !stringMatchingStrategy.containsMatch(getExcludes(), name) &&
-                        (getIncludes().isEmpty() || stringMatchingStrategy.containsMatch(getIncludes(), name));
-            }
+        return (name, metric) -> {
+            // Include the metric if its name is not excluded and its name is included
+            // Where, by default, with no includes setting, all names are included.
+            return !stringMatchingStrategy.containsMatch(getExcludes(), name) &&
+                    (getIncludes().isEmpty() || stringMatchingStrategy.containsMatch(getIncludes(), name));
         };
     }
 

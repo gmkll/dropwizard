@@ -3,6 +3,8 @@ package io.dropwizard.jersey.guava;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.base.Optional;
 import io.dropwizard.jersey.DropwizardResourceConfig;
+import io.dropwizard.jersey.MyMessage;
+import io.dropwizard.jersey.MyMessageParamConverterProvider;
 import io.dropwizard.jersey.params.UUIDParam;
 import io.dropwizard.logging.BootstrapLogging;
 import org.glassfish.jersey.test.JerseyTest;
@@ -92,6 +94,25 @@ public class OptionalQueryParamResourceTest extends JerseyTest {
         assertThat(response).isEqualTo(uuid);
     }
 
+    @Test
+    public void shouldReturnDefaultValueWhenValueIsAbsent() {
+        String response = target("/optional/value").request().get(String.class);
+        assertThat(response).isEqualTo("42");
+    }
+
+    @Test
+    public void shouldReturnDefaultValueWhenEmptyValueIsGiven() {
+        String response = target("/optional/value").queryParam("value", "").request().get(String.class);
+        assertThat(response).isEqualTo("42");
+    }
+
+    @Test
+    public void shouldReturnValueWhenValueIsPresent() {
+        String value = "123456";
+        String response = target("/optional/value").queryParam("value", value).request().get(String.class);
+        assertThat(response).isEqualTo(value);
+    }
+
     @Path("/optional")
     public static class OptionalQueryParamResource {
 
@@ -111,6 +132,12 @@ public class OptionalQueryParamResourceTest extends JerseyTest {
         @Path("/uuid")
         public String getUUID(@QueryParam("uuid") Optional<UUIDParam> uuid) {
             return uuid.or(new UUIDParam("d5672fa8-326b-40f6-bf71-d9dacf44bcdc")).get().toString();
+        }
+
+        @GET
+        @Path("/value")
+        public String getValue(@QueryParam("value") Optional<Integer> value) {
+            return value.or(42).toString();
         }
     }
 }

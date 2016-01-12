@@ -11,12 +11,20 @@ import com.codahale.metrics.logback.InstrumentedAppender;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import io.dropwizard.jackson.Jackson;
 
-import javax.management.*;
+import javax.management.InstanceAlreadyExistsException;
+import javax.management.MalformedObjectNameException;
+import javax.management.MBeanRegistrationException;
+import javax.management.MBeanServer;
+import javax.management.NotCompliantMBeanException;
+import javax.management.ObjectName;
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
 import java.io.PrintStream;
@@ -25,7 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
 @JsonTypeName("default")
 public class DefaultLoggingFactory implements LoggingFactory {
@@ -36,7 +44,7 @@ public class DefaultLoggingFactory implements LoggingFactory {
     private Level level = Level.INFO;
 
     @NotNull
-    private ImmutableMap<String, Level> loggers = ImmutableMap.of();
+    private ImmutableMap<String, JsonNode> loggers = ImmutableMap.of();
 
     @Valid
     @NotNull
@@ -56,8 +64,8 @@ public class DefaultLoggingFactory implements LoggingFactory {
 
     @VisibleForTesting
     DefaultLoggingFactory(LoggerContext loggerContext, PrintStream configurationErrorsStream) {
-        this.loggerContext = checkNotNull(loggerContext);
-        this.configurationErrorsStream = checkNotNull(configurationErrorsStream);
+        this.loggerContext = requireNonNull(loggerContext);
+        this.configurationErrorsStream = requireNonNull(configurationErrorsStream);
     }
 
     @VisibleForTesting
@@ -81,12 +89,12 @@ public class DefaultLoggingFactory implements LoggingFactory {
     }
 
     @JsonProperty
-    public ImmutableMap<String, Level> getLoggers() {
+    public ImmutableMap<String, JsonNode> getLoggers() {
         return loggers;
     }
 
     @JsonProperty
-    public void setLoggers(Map<String, Level> loggers) {
+    public void setLoggers(Map<String, JsonNode> loggers) {
         this.loggers = ImmutableMap.copyOf(loggers);
     }
 
@@ -106,7 +114,7 @@ public class DefaultLoggingFactory implements LoggingFactory {
         CHANGE_LOGGER_CONTEXT_LOCK.lock();
         final Logger root;
         try {
-            root = configureLevels();
+            root = configureLoggers(name);
         } finally {
             CHANGE_LOGGER_CONTEXT_LOCK.unlock();
         }
@@ -159,7 +167,7 @@ public class DefaultLoggingFactory implements LoggingFactory {
         root.addAppender(appender);
     }
 
-    private Logger configureLevels() {
+    private Logger configureLoggers(String name) {
         final Logger root = loggerContext.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
         loggerContext.reset();
 
@@ -171,8 +179,28 @@ public class DefaultLoggingFactory implements LoggingFactory {
 
         root.setLevel(level);
 
-        for (Map.Entry<String, Level> entry : loggers.entrySet()) {
-            loggerContext.getLogger(entry.getKey()).setLevel(entry.getValue());
+        for (Map.Entry<String, JsonNode> entry : loggers.entrySet()) {
+            final Logger logger = loggerContext.getLogger(entry.getKey());
+            final JsonNode jsonNode = entry.getValue();
+            if (jsonNode.isTextual()) {
+                // Just a level as a string
+                logger.setLevel(Level.valueOf(jsonNode.asText()));
+            } else if (jsonNode.isObject()) {
+                // A level and an appender
+                final LoggerConfiguration configuration;
+                try {
+                    configuration = Jackson.newObjectMapper().treeToValue(jsonNode, LoggerConfiguration.class);
+                } catch (JsonProcessingException e) {
+                    throw new IllegalArgumentException("Wrong format of logger '" + entry.getKey() + "'", e);
+                }
+                logger.setLevel(configuration.getLevel());
+                logger.setAdditive(configuration.isAdditive());
+                for (AppenderFactory appender : configuration.getAppenders()) {
+                    logger.addAppender(appender.build(loggerContext, name, null));
+                }
+            } else {
+                throw new IllegalArgumentException("Unsupported format of logger '" + entry.getKey() + "'");
+            }
         }
 
         return root;

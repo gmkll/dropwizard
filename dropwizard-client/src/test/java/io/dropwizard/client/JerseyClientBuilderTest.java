@@ -9,6 +9,7 @@ import com.google.common.collect.Iterables;
 import io.dropwizard.jersey.gzip.ConfiguredGZipEncoder;
 import io.dropwizard.jersey.gzip.GZipDecoder;
 import io.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
+import io.dropwizard.jersey.validation.Validators;
 import io.dropwizard.lifecycle.setup.ExecutorServiceBuilder;
 import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
 import io.dropwizard.setup.Environment;
@@ -33,7 +34,6 @@ import org.mockito.ArgumentCaptor;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
-import javax.validation.Validation;
 import javax.validation.Validator;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.WebApplicationException;
@@ -64,6 +64,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 public class JerseyClientBuilderTest {
     private final JerseyClientBuilder builder = new JerseyClientBuilder(new MetricRegistry());
@@ -71,7 +72,7 @@ public class JerseyClientBuilderTest {
     private final Environment environment = mock(Environment.class);
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private final ObjectMapper objectMapper = mock(ObjectMapper.class);
-    private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+    private final Validator validator = Validators.newValidator();
     private final HttpClientBuilder apacheHttpClientBuilder = mock(HttpClientBuilder.class);
 
     @Before
@@ -190,6 +191,7 @@ public class JerseyClientBuilderTest {
                 .iterator().hasNext()).isTrue();
         assertThat(Iterables.filter(client.getConfiguration().getInstances(), ConfiguredGZipEncoder.class)
                 .iterator().hasNext()).isTrue();
+        verify(apacheHttpClientBuilder, never()).disableContentCompression(true);
     }
 
     @Test
@@ -204,6 +206,7 @@ public class JerseyClientBuilderTest {
                 .iterator().hasNext()).isFalse();
         assertThat(Iterables.filter(client.getConfiguration().getInstances(), ConfiguredGZipEncoder.class)
                 .iterator().hasNext()).isFalse();
+        verify(apacheHttpClientBuilder).disableContentCompression(true);
     }
 
     @Test

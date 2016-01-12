@@ -5,8 +5,6 @@ import com.google.common.base.Optional;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Lists;
-
 import io.dropwizard.Application;
 import io.dropwizard.Configuration;
 import io.dropwizard.cli.ServerCommand;
@@ -17,14 +15,13 @@ import io.dropwizard.lifecycle.ServerLifecycleListener;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
 import net.sourceforge.argparse4j.inf.Namespace;
-
+import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 
 import javax.annotation.Nullable;
 import javax.validation.Validator;
-
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -58,7 +55,7 @@ public class DropwizardTestSupport<C extends Configuration> {
     protected Application<C> application;
     protected Environment environment;
     protected Server jettyServer;
-    protected List<ServiceListener<C>> listeners = Lists.newArrayList();
+    protected List<ServiceListener<C>> listeners = new ArrayList<>();
 
     public DropwizardTestSupport(Class<? extends Application<C>> applicationClass,
                              @Nullable String configPath,
@@ -167,12 +164,7 @@ public class DropwizardTestSupport<C extends Configuration> {
             final Bootstrap<C> bootstrap = new Bootstrap<C>(application) {
                 @Override
                 public void run(C configuration, Environment environment) throws Exception {
-                    environment.lifecycle().addServerLifecycleListener(new ServerLifecycleListener() {
-                        @Override
-                        public void serverStarted(Server server) {
-                            jettyServer = server;
-                        }
-                    });
+                    environment.lifecycle().addServerLifecycleListener(server -> jettyServer = server);
                     DropwizardTestSupport.this.configuration = configuration;
                     DropwizardTestSupport.this.environment = environment;
                     super.run(configuration, environment);
@@ -186,27 +178,17 @@ public class DropwizardTestSupport<C extends Configuration> {
                 }
             };
             if (explicitConfig) {
-                bootstrap.setConfigurationFactoryFactory(new ConfigurationFactoryFactory<C>() {
-                    @Override
-                    public ConfigurationFactory<C> create(Class<C> klass, Validator validator,
-                                                          ObjectMapper objectMapper, String propertyPrefix) {
-                        return new POJOConfigurationFactory<>(configuration);
-                    }
-                });
+                bootstrap.setConfigurationFactoryFactory((klass, validator, objectMapper, propertyPrefix) ->
+                    new POJOConfigurationFactory<>(configuration));
             } else if (customPropertyPrefix.isPresent()) {
-                bootstrap.setConfigurationFactoryFactory(new ConfigurationFactoryFactory<C>() {
-                    @Override
-                    public ConfigurationFactory<C> create(Class<C> klass, Validator validator,
-                                                          ObjectMapper objectMapper, String propertyPrefix) {
-                        return new ConfigurationFactory<>(klass, validator, objectMapper, customPropertyPrefix.get());
-                    }
-                });
+                bootstrap.setConfigurationFactoryFactory((klass, validator, objectMapper, propertyPrefix) ->
+                    new ConfigurationFactory<>(klass, validator, objectMapper, customPropertyPrefix.get()));
             }
 
             application.initialize(bootstrap);
             final ServerCommand<C> command = new ServerCommand<>(application);
 
-            ImmutableMap.Builder<String, Object> file = ImmutableMap.builder();
+            final ImmutableMap.Builder<String, Object> file = ImmutableMap.builder();
             if (!Strings.isNullOrEmpty(configPath)) {
                 file.put("file", configPath);
             }
@@ -227,7 +209,12 @@ public class DropwizardTestSupport<C extends Configuration> {
     }
 
     public int getAdminPort() {
-        return ((ServerConnector) jettyServer.getConnectors()[1]).getLocalPort();
+        final Connector[] connectors = jettyServer.getConnectors();
+        return ((ServerConnector) connectors[connectors.length -1]).getLocalPort();
+    }
+
+    public int getPort(int connectorIndex) {
+        return ((ServerConnector) jettyServer.getConnectors()[connectorIndex]).getLocalPort();
     }
 
     public Application<C> newApplication() {

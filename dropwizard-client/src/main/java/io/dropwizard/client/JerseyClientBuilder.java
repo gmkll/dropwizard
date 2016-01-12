@@ -4,11 +4,11 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.httpclient.HttpClientMetricNameStrategy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import io.dropwizard.jersey.gzip.ConfiguredGZipEncoder;
 import io.dropwizard.jersey.gzip.GZipDecoder;
 import io.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
+import io.dropwizard.jersey.validation.HibernateValidationFeature;
+import io.dropwizard.jersey.validation.Validators;
 import io.dropwizard.lifecycle.Managed;
 import io.dropwizard.setup.Environment;
 import org.apache.http.client.CredentialsProvider;
@@ -21,17 +21,18 @@ import org.glassfish.jersey.client.ClientConfig;
 import org.glassfish.jersey.client.spi.Connector;
 import org.glassfish.jersey.client.spi.ConnectorProvider;
 
-import javax.validation.Validation;
 import javax.validation.Validator;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.core.Configuration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
 
 /**
@@ -52,13 +53,13 @@ import static com.google.common.base.Preconditions.checkNotNull;
  */
 public class JerseyClientBuilder {
 
-    private final List<Object> singletons = Lists.newArrayList();
-    private final List<Class<?>> providers = Lists.newArrayList();
-    private final Map<String, Object> properties = Maps.newLinkedHashMap();
+    private final List<Object> singletons = new ArrayList<>();
+    private final List<Class<?>> providers = new ArrayList<>();
+    private final Map<String, Object> properties = new LinkedHashMap<>();
     private JerseyClientConfiguration configuration = new JerseyClientConfiguration();
 
     private HttpClientBuilder apacheHttpClientBuilder;
-    private Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+    private Validator validator = Validators.newValidator();
     private Environment environment;
     private ObjectMapper objectMapper;
     private ExecutorService executorService;
@@ -85,7 +86,7 @@ public class JerseyClientBuilder {
      * @return {@code this}
      */
     public JerseyClientBuilder withProvider(Object provider) {
-        singletons.add(checkNotNull(provider));
+        singletons.add(requireNonNull(provider));
         return this;
     }
 
@@ -97,7 +98,7 @@ public class JerseyClientBuilder {
      * @return {@code this}
      */
     public JerseyClientBuilder withProvider(Class<?> klass) {
-        providers.add(checkNotNull(klass));
+        providers.add(requireNonNull(klass));
         return this;
     }
 
@@ -290,16 +291,16 @@ public class JerseyClientBuilder {
                     "an executor service and an object mapper");
         }
 
-        if (executorService == null && environment != null) {
+        if (executorService == null) {
             executorService = environment.lifecycle()
                     .executorService("jersey-client-" + name + "-%d")
                     .minThreads(configuration.getMinThreads())
                     .maxThreads(configuration.getMaxThreads())
-                    .workQueue(new ArrayBlockingQueue<Runnable>(configuration.getWorkQueueSize()))
+                    .workQueue(new ArrayBlockingQueue<>(configuration.getWorkQueueSize()))
                     .build();
         }
 
-        if (objectMapper == null && environment != null) {
+        if (objectMapper == null) {
             objectMapper = environment.getObjectMapper();
         }
 
@@ -313,7 +314,13 @@ public class JerseyClientBuilder {
     private Client build(String name, ExecutorService threadPool,
                          ObjectMapper objectMapper,
                          Validator validator) {
+        if (!configuration.isGzipEnabled()) {
+            apacheHttpClientBuilder.disableContentCompression(true);
+        }
+
         final Client client = ClientBuilder.newClient(buildConfig(name, threadPool, objectMapper, validator));
+        client.register(new JerseyIgnoreRequestUserAgentHeaderFilter());
+
         // Tie the client to server lifecycle
         if (environment != null) {
             environment.lifecycle().manage(new Managed() {
@@ -348,7 +355,8 @@ public class JerseyClientBuilder {
             config.register(provider);
         }
 
-        config.register(new JacksonMessageBodyProvider(objectMapper, validator));
+        config.register(new JacksonMessageBodyProvider(objectMapper));
+        config.register(new HibernateValidationFeature(validator));
 
         for (Map.Entry<String, Object> property : this.properties.entrySet()) {
             config.property(property.getKey(), property.getValue());
@@ -358,15 +366,10 @@ public class JerseyClientBuilder {
         if (connectorProvider == null) {
             final ConfiguredCloseableHttpClient apacheHttpClient =
                     apacheHttpClientBuilder.buildWithDefaultRequestConfiguration(name);
-            connectorProvider = new ConnectorProvider() {
-                @Override
-                public Connector getConnector(Client client, Configuration runtimeConfig) {
-                    return new DropwizardApacheConnector(
-                            apacheHttpClient.getClient(),
-                            apacheHttpClient.getDefaultRequestConfig(),
-                            configuration.isChunkedEncodingEnabled());
-                }
-            };
+            connectorProvider = (client, runtimeConfig) -> new DropwizardApacheConnector(
+                    apacheHttpClient.getClient(),
+                    apacheHttpClient.getDefaultRequestConfig(),
+                    configuration.isChunkedEncodingEnabled());
         }
         config.connectorProvider(connectorProvider);
 

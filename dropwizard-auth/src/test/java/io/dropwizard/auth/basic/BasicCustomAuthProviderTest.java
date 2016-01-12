@@ -1,19 +1,20 @@
 package io.dropwizard.auth.basic;
 
-import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableList;
 import io.dropwizard.auth.*;
 import io.dropwizard.auth.util.AuthUtil;
 import io.dropwizard.jersey.DropwizardResourceConfig;
-import org.glassfish.jersey.server.filter.RolesAllowedDynamicFeature;
-
 import javax.ws.rs.container.ContainerRequestFilter;
 import java.security.Principal;
 
 public class BasicCustomAuthProviderTest extends AuthBaseTest<BasicCustomAuthProviderTest.BasicAuthTestResourceConfig> {
 
-    public static class BasicAuthTestResourceConfig extends AuthBaseResourceConfig{
-        protected ContainerRequestFilter getAuthFilter() {
+    public static class BasicAuthTestResourceConfig extends AbstractAuthResourceConfig {
+        public BasicAuthTestResourceConfig() {
+            register(AuthResource.class);
+        }
+
+        @Override protected ContainerRequestFilter getAuthFilter() {
             BasicCredentialAuthFilter.Builder<Principal> builder  = new BasicCredentialAuthFilter.Builder<>();
             builder.setAuthorizer(AuthUtil.getTestAuthorizer(ADMIN_USER, ADMIN_ROLE));
             builder.setAuthenticator(AuthUtil.getBasicAuthenticator(ImmutableList.of(ADMIN_USER, ORDINARY_USER)));

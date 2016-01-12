@@ -1,12 +1,13 @@
 package io.dropwizard.assets;
 
-import com.google.common.base.Charsets;
 import io.dropwizard.Bundle;
 import io.dropwizard.servlets.assets.AssetServlet;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.nio.charset.StandardCharsets;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
@@ -109,7 +110,19 @@ public class AssetsBundle implements Bundle {
         environment.servlets().addServlet(assetsName, createServlet()).addMapping(uriPath + '*');
     }
 
-    private AssetServlet createServlet() {
-        return new AssetServlet(resourcePath, uriPath, indexFile, Charsets.UTF_8);
+    public String getResourcePath() {
+        return resourcePath;
+    }
+
+    public String getUriPath() {
+        return uriPath;
+    }
+
+    public String getIndexFile() {
+        return indexFile;
+    }
+
+    protected AssetServlet createServlet() {
+        return new AssetServlet(resourcePath, uriPath, indexFile, StandardCharsets.UTF_8);
     }
 }

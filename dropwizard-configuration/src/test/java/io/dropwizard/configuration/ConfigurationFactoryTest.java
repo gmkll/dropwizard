@@ -3,22 +3,22 @@ package io.dropwizard.configuration;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.io.Resources;
 import io.dropwizard.jackson.Jackson;
+import io.dropwizard.validation.BaseValidator;
 import org.assertj.core.data.MapEntry;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import javax.validation.Validation;
 import javax.validation.Validator;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Pattern;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -59,10 +59,10 @@ public class ConfigurationFactoryTest {
         List<String> type;
 
         @JsonProperty
-        private Map<String, String> properties = Maps.newLinkedHashMap();
+        private Map<String, String> properties = new LinkedHashMap<>();
 
         @JsonProperty
-        private List<ExampleServer> servers = Lists.newArrayList();
+        private List<ExampleServer> servers = new ArrayList<>();
 
         public String getName() {
             return name;
@@ -110,7 +110,7 @@ public class ConfigurationFactoryTest {
         }
     }
 
-    private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+    private final Validator validator = BaseValidator.newValidator();
     private final ConfigurationFactory<Example> factory =
             new ConfigurationFactory<>(Example.class, validator, Jackson.newObjectMapper(), "dw");
     private File malformedFile;

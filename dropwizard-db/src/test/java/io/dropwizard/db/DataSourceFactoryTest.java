@@ -2,8 +2,11 @@ package io.dropwizard.db;
 
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.base.Optional;
+import io.dropwizard.configuration.ConfigurationFactory;
+import io.dropwizard.configuration.ResourceConfigurationSourceProvider;
+import io.dropwizard.jackson.Jackson;
 import io.dropwizard.util.Duration;
-import org.apache.tomcat.jdbc.pool.Validator;
+import io.dropwizard.validation.BaseValidator;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -24,8 +27,7 @@ public class DataSourceFactoryTest {
     @Before
     public void setUp() {
         factory = new DataSourceFactory();
-        factory.setUrl("jdbc:h2:mem:DbTest-" + System.currentTimeMillis());
-        factory.setUser("sa");
+        factory.setUrl("jdbc:h2:mem:DbTest-" + System.currentTimeMillis() + ";user=sa");
         factory.setDriverClass("org.h2.Driver");
         factory.setValidationQuery("SELECT 1");
     }
@@ -96,5 +98,19 @@ public class DataSourceFactoryTest {
             }
         }
         assertThat(CustomConnectionValidator.loaded).isTrue();
+    }
+
+    @Test
+    public void createDefaultFactory() throws Exception {
+        final DataSourceFactory factory = new ConfigurationFactory<>(DataSourceFactory.class,
+            BaseValidator.newValidator(), Jackson.newObjectMapper(), "dw")
+            .build(new ResourceConfigurationSourceProvider(), "yaml/minimal_db_pool.yml");
+
+        assertThat(factory.getDriverClass()).isEqualTo("org.postgresql.Driver");
+        assertThat(factory.getUser()).isEqualTo("pg-user");
+        assertThat(factory.getPassword()).isEqualTo("iAMs00perSecrEET");
+        assertThat(factory.getUrl()).isEqualTo("jdbc:postgresql://db.example.com/db-prod");
+        assertThat(factory.getValidationQuery()).isEqualTo("/* Health Check */ SELECT 1");
+        assertThat(factory.getValidationQueryTimeout()).isEqualTo(Optional.absent());
     }
 }
